@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "minimum": {
+    "sillytavern": "1.17.0",
+    "tavernHelper": null
+  },
+  "requirements": [
+    {
+      "id": "host-context",
+      "owner": "sillytavern",
+      "symbol": "SillyTavern.getContext",
+      "required": true,
+      "fallback": null
+    },
+    {
+      "id": "token-counting",
+      "owner": "sillytavern",
+      "symbol": "context.getTokenCountAsync",
+      "required": true,
+      "fallback": "不计数，仅展示历史"
+    },
+    {
+      "id": "model-name",
+      "owner": "sillytavern",
+      "symbol": "context.getChatCompletionModel",
+      "required": false,
+      "fallback": "context.mainApi"
+    },
+    {
+      "id": "events",
+      "owner": "sillytavern",
+      "symbol": "context.eventTypes.{MESSAGE_SENT,MESSAGE_RECEIVED,CHAT_CHANGED}",
+      "required": true,
+      "fallback": null
+    },
+    {
+      "id": "settings-namespace",
+      "owner": "sillytavern",
+      "symbol": "context.extensionSettings + saveSettingsDebounced",
+      "required": true,
+      "fallback": null
+    },
+    {
+      "id": "slash-command",
+      "owner": "sillytavern",
+      "symbol": "context.SlashCommandParser.addCommandObject",
+      "required": false,
+      "fallback": "仅设置抽屉查看"
+    },
+    {
+      "id": "template-ui",
+      "owner": "sillytavern",
+      "symbol": "context.renderExtensionTemplateAsync + callGenericPopup",
+      "required": false,
+      "fallback": "纯文本提示"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+<div class="wide100p">
+    <h3>模型 Token 统计</h3>
+    <div class="justifyLeft flex-container flexFlowColumn">
+        <h4>当前聊天：{{curChatId}}（输入 {{curInput}} / 输出 {{curOutput}} / 合计 {{curTotal}}）</h4>
+        <table class="mtt-table">
+            <thead><tr><th>模型</th><th>输入</th><th>输出</th><th>总计</th><th>消息数</th></tr></thead>
+            <tbody>
+            {{#each globalRows}}
+                <tr><td class="mtt-model">{{model}}</td><td>{{input}}</td><td>{{output}}</td><td class="mtt-total"><b>{{total}}</b></td><td>{{count}}</td></tr>
+            {{else}}
+                <tr><td colspan="5">还没有全局统计数据，先发几条消息吧。</td></tr>
+            {{/each}}
+            <tr class="mtt-total-row"><td><b>{{totalRow.model}}</b></td><td>{{totalRow.input}}</td><td>{{totalRow.output}}</td><td class="mtt-total"><b>{{totalRow.total}}</b></td><td>{{totalRow.count}}</td></tr>
+            </tbody>
+        </table>
+        <h4>各聊天 Token（按总量降序）</h4>
+        <table class="mtt-table">
+            <thead><tr><th>聊天 ID</th><th>输入</th><th>输出</th><th>总计</th><th>消息数</th></tr></thead>
+            <tbody>
+            {{#each perChat}}
+                <tr><td class="mtd-model">{{chatId}}</td><td>{{input}}</td><td>{{output}}</td><td class="mtt-total"><b>{{total}}</b></td><td>{{count}}</td></tr>
+            {{else}}
+                <tr><td colspan="5">暂无按聊天的统计数据。</td></tr>
+            {{/each}}
+            </tbody>
+        </table>
+    </div>
+</div>

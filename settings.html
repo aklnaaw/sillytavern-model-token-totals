@@ -1,0 +1,28 @@
+<div class="model-token-totals-settings inline-drawer">
+    <div class="inline-drawer-toggle inline-drawer-header">
+        <b>模型 Token 统计</b>
+        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+    </div>
+    <div class="inline-drawer-content">
+        <div class="flex-container flexFlowColumn">
+            <label class="checkbox_label">
+                <input id="mtt_enabled" type="checkbox" />
+                <span>启用统计（默认开启）</span>
+            </label>
+            <label class="checkbox_label">
+                <input id="mtt_count_user" type="checkbox" />
+                <span>把用户消息计入输入 Token</span>
+            </label>
+            <label class="checkbox_label">
+                <input id="mtt_count_output" type="checkbox" />
+                <span>把模型回复计入输出 Token</span>
+            </label>
+        </div>
+        <div class="flex-container justifyLeft gap10" style="margin-top:10px;">
+            <button id="mtt_open_drawer" class="menu_button">打开悬浮球抽屉</button>
+            <button id="mtt_reset_all" class="menu_button">全局清零</button>
+        </div>
+        <p class="mtt-hint">悬浮球位于页面右下角，显示出当前聊天 + 全局总额；点它即可展开/收起小抽屉。命令：/tokenstats</p>
+        <hr class="sysHR" />
+    </div>
+</div>

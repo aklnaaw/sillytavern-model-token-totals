@@ -1,0 +1,15 @@
+{
+  "display_name": "模型 Token 统计",
+  "loading_order": 20,
+  "dependencies": [],
+  "js": "index.js",
+  "author": "aklnaaw",
+  "version": "0.2.0",
+  "auto_update": false,
+  "hooks": {
+    "activate": "onActivate",
+    "clean": "onClean"
+  },
+  "css": "style.css",
+  "minimum_client_version": "1.17.0"
+}
