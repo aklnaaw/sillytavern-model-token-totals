@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS = Object.freeze({
     countOutput: true,
     totals: {}, //     { '<模型名>': { input, output, count } }            全局额度
     chatTotals: {},   // { '<聊天id>': { '<模型名>': { input, output, count } } }
+    fabPos: null,     // 悬浮球被拖拽后的位置 { x, y }（记忆位置）
 });
 
 let countedKeys = new Set();
@@ -154,11 +155,108 @@ function injectFloat() {
         '</div>';
 
     $('body').append(html);
-    $('#mtt-fab').on('click', () => toggleDrawer());
+    applyFabPos();
+    makeDraggable();
     $('#mtt-drawer-close').on('click', () => toggleDrawer(false));
     $('#mtt-drawer-refresh').on('click', () => renderFloatUI());
     // ESC 关闭
     $(document).on('keydown.mtt', (e) => { if (e.key === 'Escape' && drawerOpen) toggleDrawer(false); });
+    // 窗口尺寸变化（旋转/分栏）时重新钳位
+    $(window).on('resize.mtt', () => { applyFabPos(); if (drawerOpen) positionDrawer(); });
+}
+
+function fabEl() { return document.getElementById('mtt-fab'); }
+
+// 悬浮球拖拽（Pointer Events，触屏/鼠标通用）
+function makeDraggable() {
+    const fab = fabEl();
+    if (!fab || fab.dataset.mttDragReady) return;
+    fab.dataset.mttDragReady = '1';
+    let drag = null;
+    const onDown = (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (drawerOpen) toggleDrawer(false); // 拖动前先收抽屉，避免挡住
+        const r = fab.getBoundingClientRect();
+        drag = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, baseX: r.left, baseY: r.top, moved: false };
+        try { fab.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+        e.preventDefault();
+    };
+    const onMove = (e) => {
+        if (!drag || e.pointerId !== drag.pointerId) return;
+        const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+        if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+        if (drag.moved) placeFab(drag.baseX + dx, drag.baseY + dy);
+    };
+    const onEnd = (e) => {
+        if (!drag || e.pointerId !== drag.pointerId) return;
+        const wasMoved = drag.moved;
+        drag = null;
+        if (wasMoved) persistFabPos();
+        else toggleDrawer();
+    };
+    fab.addEventListener('pointerdown', onDown);
+    fab.addEventListener('pointermove', onMove);
+    fab.addEventListener('pointerup', onEnd);
+    fab.addEventListener('pointercancel', onEnd);
+}
+
+// 把悬浮球放到 (x,y)，并按视口钳位
+function placeFab(x, y) {
+    const fab = fabEl();
+    if (!fab) return;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const fw = fab.offsetWidth || 46, fh = fab.offsetHeight || 46;
+    x = Math.max(4, Math.min(x, vw - fw - 4));
+    y = Math.max(4, Math.min(y, vh - fh - 4));
+    fab.style.left = x + 'px';
+    fab.style.top = y + 'px';
+    fab.style.right = 'auto';
+    fab.style.bottom = 'auto';
+}
+
+function persistFabPos() {
+    const fab = fabEl();
+    if (!fab) return;
+    try {
+        const settings = getSettings();
+        settings.fabPos = { x: parseInt(fab.style.left, 10) || 0, y: parseInt(fab.style.top, 10) || 0 };
+        getCtx().saveSettingsDebounced();
+    } catch { /* ignore */ }
+}
+
+// 加载时恢复上次的悬浮球位置
+function applyFabPos() {
+    const fab = fabEl();
+    if (!fab) return;
+    const pos = getSettings().fabPos;
+    if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const fw = fab.offsetWidth || 46, fh = fab.offsetHeight || 46;
+    const x = Math.max(4, Math.min(pos.x, vw - fw - 4));
+    const y = Math.max(4, Math.min(pos.y, vh - fh - 4));
+    fab.style.left = x + 'px';
+    fab.style.top = y + 'px';
+    fab.style.right = 'auto';
+    fab.style.bottom = 'auto';
+}
+
+// 抽屉跟随悬浮球：优先弹出在球上方，空间不足则下方，再不足兜底视口内
+function positionDrawer() {
+    const fab = fabEl();
+    const drawer = document.getElementById('mtt-drawer');
+    if (!fab || !drawer) return;
+    const r = fab.getBoundingClientRect();
+    const dw = drawer.offsetWidth, dh = drawer.offsetHeight;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let left = r.left + r.width / 2 - dw / 2;
+    left = Math.max(8, Math.min(left, vw - dw - 8));
+    let top = r.top - dh - 8;
+    if (top < 8) top = r.bottom + 8;
+    if (top + dh > vh - 8) top = vh - dh - 8;
+    drawer.style.left = left + 'px';
+    drawer.style.top = top + 'px';
+    drawer.style.right = 'auto';
+    drawer.style.bottom = 'auto';
 }
 
 function toggleDrawer(open) {
@@ -166,6 +264,7 @@ function toggleDrawer(open) {
     if (drawerOpen) {
         renderFloatUI();
         $('#mtt-drawer').prop('hidden', false);
+        positionDrawer();
     } else {
         $('#mtt-drawer').prop('hidden', true);
     }
@@ -232,6 +331,7 @@ function renderFloatUI() {
         '  <button id="mtt-reset-all" class="mtt-btn mtt-btn-danger">全局清零</button>' +
         '</div>'
     );
+    if (drawerOpen) positionDrawer();
     $('#mtt-open-win').on('click', () => showFullPopup());
     $('#mtt-reset-all').on('click', () => {
         const settings = getSettings();
@@ -336,7 +436,7 @@ export async function onActivate() {
         injectFloat();
         renderFloatUI();
         await initSettingsPanel();
-        console.log('[' + MODULE_ID + '] 已激活 v0.2.0');
+        console.log('[' + MODULE_ID + '] 已激活 v0.3.0');
     } catch (error) {
         console.error('[' + MODULE_ID + '] 激活失败：', error);
     }
@@ -350,6 +450,7 @@ export function onClean() {
         ctx.eventSource.removeListener(ctx.eventTypes.CHAT_CHANGED, onChatChanged);
         $('#mtt-float')?.remove();
         $(document).off('keydown.mtt');
+        $(window).off('resize.mtt');
         $('#extensions_settings2 .model-token-totals-settings')?.remove();
     } catch { /* 忽略 */ }
 }

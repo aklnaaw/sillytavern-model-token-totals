@@ -16,6 +16,8 @@
     font-size: 15px;
     line-height: 1;
     transition: transform 0.15s ease;
+    touch-action: none; /* 手机端按住拖动时不触发页面滚动 */
+    -webkit-tap-highlight-color: transparent;
 }
 #mtt-fab:hover { transform: scale(1.06); }
 #mtt-fab i { pointer-events: none; }
@@ -77,4 +79,20 @@
 .mtt-table .mtt-total { text-align: right; }
 .mtt-model { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-@media (max-width: 500px) { #mtt-drawer { width: 280px; } }
+/* ===== 手机适配（触屏） ===== */
+@media (max-width: 820px) {
+    #mtt-fab { width: 48px; height: 48px; font-size: 17px; }
+    #mtt-drawer {
+        width: min(360px, calc(100vw - 20px));
+        max-height: 62vh;
+        border-radius: 14px;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+    }
+    .mtt-drawer-head { padding: 12px 14px; font-size: 15px; }
+    .mtt-icon-btn { padding: 8px 10px; font-size: 16px; }
+    .mtt-drawer-body { padding: 10px 12px 16px; }
+    .mtt-card { padding: 10px 12px; }
+    .mtt-line { font-size: 13px; padding: 3px 0; }
+    .mtt-btn { padding: 10px 8px; font-size: 13px; min-height: 38px; }
+}
