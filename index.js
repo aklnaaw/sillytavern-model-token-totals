@@ -161,6 +161,10 @@ function injectFloat() {
     $('#mtt-drawer-refresh').on('click', () => renderFloatUI());
     // ESC 关闭
     $(document).on('keydown.mtt', (e) => { if (e.key === 'Escape' && drawerOpen) toggleDrawer(false); });
+    // 点击抽屉/悬浮球以外区域 = 关闭抽屉（手机友好）
+    $(document).on('pointerdown.mtt', (e) => {
+        if (drawerOpen && !e.target?.closest?.('#mtt-float')) toggleDrawer(false);
+    });
     // 窗口尺寸变化（旋转/分栏）时重新钳位
     $(window).on('resize.mtt', () => { applyFabPos(); if (drawerOpen) positionDrawer(); });
 }
@@ -175,7 +179,6 @@ function makeDraggable() {
     let drag = null;
     const onDown = (e) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
-        if (drawerOpen) toggleDrawer(false); // 拖动前先收抽屉，避免挡住
         const r = fab.getBoundingClientRect();
         drag = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, baseX: r.left, baseY: r.top, moved: false };
         try { fab.setPointerCapture(e.pointerId); } catch { /* ignore */ }
@@ -184,7 +187,10 @@ function makeDraggable() {
     const onMove = (e) => {
         if (!drag || e.pointerId !== drag.pointerId) return;
         const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
-        if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+        if (Math.abs(dx) + Math.abs(dy) > 4 && !drag.moved) {
+            drag.moved = true;
+            if (drawerOpen) toggleDrawer(false); // 真正开始拖动才收抽屉，避免与“点击关闭”冲突
+        }
         if (drag.moved) placeFab(drag.baseX + dx, drag.baseY + dy);
     };
     const onEnd = (e) => {
@@ -436,7 +442,7 @@ export async function onActivate() {
         injectFloat();
         renderFloatUI();
         await initSettingsPanel();
-        console.log('[' + MODULE_ID + '] 已激活 v0.3.0');
+        console.log('[' + MODULE_ID + '] 已激活 v0.3.1');
     } catch (error) {
         console.error('[' + MODULE_ID + '] 激活失败：', error);
     }
@@ -450,6 +456,7 @@ export function onClean() {
         ctx.eventSource.removeListener(ctx.eventTypes.CHAT_CHANGED, onChatChanged);
         $('#mtt-float')?.remove();
         $(document).off('keydown.mtt');
+        $(document).off('pointerdown.mtt');
         $(window).off('resize.mtt');
         $('#extensions_settings2 .model-token-totals-settings')?.remove();
     } catch { /* 忽略 */ }
