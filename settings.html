@@ -17,12 +17,16 @@
                 <input id="mtt_count_output" type="checkbox" />
                 <span>把模型回复计入输出 Token</span>
             </label>
+            <label class="checkbox_label">
+                <input id="mtt_use_real" type="checkbox" />
+                <span>优先采用 API 返回的真实用量（推荐）</span>
+            </label>
         </div>
         <div class="flex-container justifyLeft gap10" style="margin-top:10px;">
             <button id="mtt_open_drawer" class="menu_button">打开悬浮球抽屉</button>
             <button id="mtt_reset_all" class="menu_button">全局清零</button>
         </div>
-        <p class="mtt-hint">悬浮球位于页面右下角，显示出当前聊天 + 全局总额；点它即可展开/收起小抽屉。命令：/tokenstats</p>
+        <p class="mtt-hint">悬浮球位于页面右下角，可拖动。点它展开/收起小抽屉，抽屉里可切换悬浮球显示「当前聊天 / 全局 / 今日」。命令：/tokenstats</p>
         <hr class="sysHR" />
     </div>
 </div>

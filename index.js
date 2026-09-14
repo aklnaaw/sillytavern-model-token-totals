@@ -1,11 +1,13 @@
 // ============================================================================
-//  模型 Token 统计（Model Token Totals） v0.2.0  SillyTavern UI Extension
+//  模型 Token 统计（Model Token Totals） v0.4.0  SillyTavern UI Extension
 //  目标版本：SillyTavern 1.18.0
 //
 //  三重视角：
 //   1. 全局总额 —— totals[模型] 累计所有聊天的输入/输出 Token（持久化）
 //   2. 当前聊天 —— chatTotals[聊天ID][模型] 记下每个聊天各自用掉的 Token
 //   3. 悬浮球抽屉 —— 页面右下角悬浮球，点开小抽屉实时看「当前聊天 + 全局」
+//
+//  真实用量：拦截 chat-completions 响应读取 SSE 中的 usage；拿不到时回落到本地估算。
 //
 //  命令：/tokenstats  另在 设置-扩展 里有可点击入口。
 // ============================================================================
@@ -19,10 +21,15 @@ const DEFAULT_SETTINGS = Object.freeze({
     totals: {}, //     { '<模型名>': { input, output, count } }            全局额度
     chatTotals: {},   // { '<聊天id>': { '<模型名>': { input, output, count } } }
     fabPos: null,     // 悬浮球被拖拽后的位置 { x, y }（记忆位置）
+    fabMode: 'chat',  // 悬浮球数字模式：'chat' 当前聊天 | 'global' 全局 | 'today' 今日
+    useRealUsage: true, // 优先采用 API 返回的真实 usage
+    dailyTotals: {},  // { 'YYYY-MM-DD': { '<模型名>': { input, output, count } } }
 });
 
 let countedKeys = new Set();
 let drawerOpen = false;
+let lastRealUsage = null;
+const origFetch = globalThis.fetch;
 
 function getCtx() {
     const ctx = globalThis.SillyTavern?.getContext?.();
@@ -85,6 +92,105 @@ function escapeHtml(s) {
     return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function todayKey() {
+    const d = new Date();
+    const p = (v) => String(v).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+function addUsage(model, chatId, inputTokens, outputTokens) {
+    const settings = getSettings();
+    const day = todayKey();
+    const bump = (bucket) => {
+        const e = bucket[model] || (bucket[model] = { input: 0, output: 0, count: 0 });
+        e.input += inputTokens; e.output += outputTokens; e.count += 1;
+    };
+    bump(settings.totals);
+    if (chatId) {
+        settings.chatTotals[chatId] = settings.chatTotals[chatId] || {};
+        bump(settings.chatTotals[chatId]);
+    }
+    settings.dailyTotals[day] = settings.dailyTotals[day] || {};
+    bump(settings.dailyTotals[day]);
+    getCtx().saveSettingsDebounced();
+}
+
+function daySummary(day) {
+    const settings = getSettings();
+    const bucket = day ? settings.dailyTotals?.[day] || {} : {};
+    let input = 0, output = 0, count = 0;
+    const models = [];
+    for (const [model, v] of Object.entries(bucket)) {
+        const i = Number(v?.input || 0), o = Number(v?.output || 0);
+        input += i; output += o; count += Number(v?.count || 0);
+        models.push({ model, input: i, output: o, total: i + o, count: Number(v?.count || 0) });
+    }
+    models.sort((a, b) => b.total - a.total);
+    return { day, input, output, total: input + output, count, models };
+}
+
+// ===== 真实用量拦截 =====
+function isGenerateRequest(input) {
+    let url = '';
+    if (typeof input === 'string') url = input;
+    else if (input && input.url) url = String(input.url);
+    return url.indexOf('/api/backends/chat-completions/generate') >= 0;
+}
+
+function parseUsageFromChunk(text) {
+    let found = null;
+    for (const line of String(text).split('\n')) {
+        const t = line.trim();
+        if (t.indexOf('data:') !== 0) continue;
+        const payload = t.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        try {
+            const obj = JSON.parse(payload);
+            const u = obj && obj.usage;
+            if (u && (Number(u.prompt_tokens) > 0 || Number(u.completion_tokens) > 0)) {
+                found = { input: Number(u.prompt_tokens) || 0, output: Number(u.completion_tokens) || 0 };
+            }
+        } catch (e) { /* 非 JSON 行 */ }
+    }
+    return found;
+}
+
+function installFetchInterceptor() {
+    if (globalThis.fetch !== origFetch) return;
+    globalThis.fetch = async function (input, init) {
+        const response = await origFetch.call(globalThis, input, init);
+        try {
+            const settings = getSettings();
+            if (!settings.enabled || !settings.useRealUsage) return response;
+            if (!isGenerateRequest(input)) return response;
+            if (!response || !response.body || typeof response.body.getReader !== 'function') return response;
+            lastRealUsage = null;
+            const clone = response.clone();
+            (async () => {
+                const reader = clone.body.getReader();
+                const decoder = new TextDecoder();
+                let buf = '';
+                try {
+                    while (true) {
+                        const r = await reader.read();
+                        if (r.done) break;
+                        buf += decoder.decode(r.value, { stream: true });
+                        const hit = parseUsageFromChunk(buf);
+                        if (hit) lastRealUsage = hit;
+                        if (buf.length > 1000000) buf = buf.slice(-20000);
+                    }
+                } catch (e) { /* 流中断 */ }
+            })();
+        } catch (e) { /* 拦截失败不影响请求 */ }
+        return response;
+    };
+}
+
+function restoreFetch() {
+    if (globalThis.fetch !== origFetch) globalThis.fetch = origFetch;
+}
+
+
 // ============================================================================
 // 统计核心
 // ============================================================================
@@ -103,29 +209,26 @@ async function countMessage(messageId, kind) {
     if (countedKeys.has(key)) return;
     countedKeys.add(key);
 
+    const model = currentModel();
+    const chatId = currentChatId();
+
+    // 输出优先用 API 返回的真实 usage（含完整 prompt，比单条消息估算准得多）
+    if (kind === 'output' && settings.useRealUsage && lastRealUsage) {
+        const real = lastRealUsage;
+        lastRealUsage = null;
+        addUsage(model, chatId, real.input, real.output);
+        renderFloatUI();
+        return;
+    }
+
+    // 回落：本地 tokenizer 估算单条消息
     let tokens = 0;
     try { tokens = Number(await ctx.getTokenCountAsync(msg.mes)) || 0; } catch { tokens = 0; }
     if (tokens === 0) return;
 
-    const model = currentModel();
-    const chatId = currentChatId();
-
-    settings.totals[model] ??= { input: 0, output: 0, count: 0 };
-    const ge = settings.totals[model];
-    if (kind === 'input') ge.input += tokens; else ge.output += tokens;
-    ge.count += 1;
-
-    if (chatId) {
-        settings.chatTotals[chatId] = settings.chatTotals[chatId] || {};
-        const cm = settings.chatTotals[chatId][model] || (settings.chatTotals[chatId][model] = { input: 0, output: 0, count: 0 });
-        if (kind === 'input') cm.input += tokens; else cm.output += tokens;
-        cm.count += 1;
-    }
-
-    ctx.saveSettingsDebounced();
+    addUsage(model, chatId, kind === 'input' ? tokens : 0, kind === 'output' ? tokens : 0);
     renderFloatUI();
 }
-
 const onUserMessage = (messageId) => countMessage(messageId, 'input');
 const onAssistantMessage = (messageId) => countMessage(messageId, 'output');
 const onChatChanged = () => renderFloatUI();
@@ -306,10 +409,16 @@ function currentChatSummary() {
 
 function renderFloatUI() {
     if (!$('#mtt-float').length) return;
+    const settings = getSettings();
     const global_ = globalsummary();
     const chat = currentChatSummary();
+    const today = daySummary(todayKey());
 
-    $('#mtt-fab-count').text(compact(chat.total || global_.total));
+    // 悬浮球数字：按模式显示
+    const mode = settings.fabMode || 'chat';
+    const fabValue = mode === 'global' ? global_.total : mode === 'today' ? today.total : chat.total;
+    $('#mtt-fab-count').text(compact(fabValue));
+    $('#mtt-fab').attr('title', '模型 Token 统计（' + (mode === 'global' ? '全局' : mode === 'today' ? '今日' : '当前聊天') + '）');
 
     const chatHtml = '<div class="mtt-card">' +
         '<div class="mtt-card-title">当前聊天' + (chat.chatId ? '<span class="mtt-muted">' + escapeHtml(chat.chatId.slice(-6)) + '</span>' : '') + '</div>' +
@@ -321,6 +430,14 @@ function renderFloatUI() {
             : '<div class="mtt-muted">尚未进入聊天</div>') +
         '</div>';
 
+    const todayHtml = '<div class="mtt-card">' +
+        '<div class="mtt-card-title">今日 <span class="mtt-muted">' + escapeHtml(today.day || '') + '</span></div>' +
+        '<div class="mtt-line mtt-line-total"><span>输入+输出</span><b>' + fmt(today.total) + '</b></div>' +
+        (today.models.length
+            ? today.models.slice(0, 4).map(r => '<div class="mtt-line"><span>' + escapeHtml(r.model) + '</span><b>' + compact(r.input) + ' / ' + compact(r.output) + '</b></div>').join('')
+            : '<div class="mtt-muted">今天还没有记录</div>') +
+        '</div>';
+
     const topModels = global_.models.slice(0, 4).map(r =>
         '<div class="mtt-line"><span title="' + escapeHtml(r.model) + '">' + escapeHtml(r.model) + '</span>' +
         '<b>' + compact(r.input) + ' / ' + compact(r.output) + '</b></div>').join('');
@@ -330,25 +447,39 @@ function renderFloatUI() {
         (topModels || '<div class="mtt-muted">暂无数据</div>') +
         '</div>';
 
+    // 悬浮球显示模式切换
+    const modeHtml = '<div class="mtt-card">' +
+        '<div class="mtt-card-title">悬浮球显示</div>' +
+        '<div class="mtt-modes">' +
+        ['chat', 'global', 'today'].map(m =>
+            '<button class="mtt-mode-btn' + (mode === m ? ' active' : '') + '" data-mode="' + m + '">' +
+            (m === 'chat' ? '当前聊天' : m === 'global' ? '全局' : '今日') + '</button>').join('') +
+        '</div></div>';
+
     $('#mtt-drawer-body').html(
-        chatHtml + globalHtml +
+        chatHtml + todayHtml + globalHtml + modeHtml +
         '<div class="mtt-actions">' +
         '  <button id="mtt-open-win" class="mtt-btn">查看完整统计</button>' +
         '  <button id="mtt-reset-all" class="mtt-btn mtt-btn-danger">全局清零</button>' +
         '</div>'
     );
+    $('#mtt-drawer-body .mtt-mode-btn').on('click', function () {
+        settings.fabMode = $(this).data('mode');
+        getCtx().saveSettingsDebounced();
+        renderFloatUI();
+    });
     if (drawerOpen) positionDrawer();
     $('#mtt-open-win').on('click', () => showFullPopup());
     $('#mtt-reset-all').on('click', () => {
-        const settings = getSettings();
-        settings.totals = {};
-        settings.chatTotals = {};
+        const st = getSettings();
+        st.totals = {};
+        st.chatTotals = {};
+        st.dailyTotals = {};
         getCtx().saveSettingsDebounced();
         renderFloatUI();
         toastr.info('已清零全部 Token 统计');
     });
 }
-
 // ============================================================================
 // 完整统计弹窗（/tokenstats）
 // ============================================================================
@@ -356,6 +487,7 @@ async function showFullPopup() {
     const ctx = getCtx();
     const global_ = globalsummary();
     const chat = currentChatSummary();
+    const today = daySummary(todayKey());
 
     // 全局（按模型）表格
     const globalRows = global_.models.map(r => ({ ...r, input: fmt(r.input), output: fmt(r.output), total: fmt(r.total) }));
@@ -378,6 +510,10 @@ async function showFullPopup() {
         totalRow,
         perChat,
         curChatId: chat.chatId || '',
+        todayDay: today.day || '',
+        todayInput: fmt(today.input),
+        todayOutput: fmt(today.output),
+        todayTotal: fmt(today.total),
         curInput: fmt(chat.input),
         curOutput: fmt(chat.output),
         curTotal: fmt(chat.total),
@@ -407,10 +543,15 @@ async function initSettingsPanel() {
         settings.countOutput = $(this).prop('checked');
         ctx.saveSettingsDebounced();
     });
+    $('#mtt_use_real').prop('checked', settings.useRealUsage).on('change', function () {
+        settings.useRealUsage = $(this).prop('checked');
+        ctx.saveSettingsDebounced();
+    });
     $('#mtt_open_drawer').on('click', () => toggleDrawer(true));
     $('#mtt_reset_all').on('click', () => {
         settings.totals = {};
         settings.chatTotals = {};
+        settings.dailyTotals = {};
         ctx.saveSettingsDebounced();
         renderFloatUI();
         toastr.info('已清零全部 Token 统计');
@@ -423,7 +564,7 @@ function registerCommand(ctx) {
         aliases: ['tstats', 'tt'],
         callback: () => toggleDrawer(true),
         returns: '',
-        helpString: '<div>打开「模型 Token 统计」悬浮抽屉（全局总额 + 当前聊天）。</div>',
+        helpString: '<div>打开「模型 Token 统计」悬浮抽屉（当前聊天 + 今日 + 全局总额）。</div>',
     }));
 }
 
@@ -439,10 +580,11 @@ export async function onActivate() {
         ctx.eventSource.on(ctx.eventTypes.MESSAGE_RECEIVED, onAssistantMessage);
         ctx.eventSource.on(ctx.eventTypes.CHAT_CHANGED, onChatChanged);
         registerCommand(ctx);
+        installFetchInterceptor();
         injectFloat();
         renderFloatUI();
         await initSettingsPanel();
-        console.log('[' + MODULE_ID + '] 已激活 v0.3.1');
+        console.log('[' + MODULE_ID + '] 已激活 v0.4.0');
     } catch (error) {
         console.error('[' + MODULE_ID + '] 激活失败：', error);
     }
@@ -454,6 +596,7 @@ export function onClean() {
         ctx.eventSource.removeListener(ctx.eventTypes.MESSAGE_SENT, onUserMessage);
         ctx.eventSource.removeListener(ctx.eventTypes.MESSAGE_RECEIVED, onAssistantMessage);
         ctx.eventSource.removeListener(ctx.eventTypes.CHAT_CHANGED, onChatChanged);
+        restoreFetch();
         $('#mtt-float')?.remove();
         $(document).off('keydown.mtt');
         $(document).off('pointerdown.mtt');

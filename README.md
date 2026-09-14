@@ -1,55 +1,53 @@
 # 模型 Token 统计（Model Token Totals）
 
-SillyTavern UI 扩展 · v0.3.1 · 目标版本：1.18.0
+SillyTavern UI 扩展 · v0.4.0 · 目标版本：1.18.0
 
 ## 功能
 
-- **全局总额**：跨所有聊天累计每个模型的输入/输出 Token，重启不丢
-- **当前聊天**：进入聊天即显示该聊天各自用掉的 Token（按模型拆分）
-- **悬浮球 + 小抽屉**：页面右下角悬浮球实时显示数字，点开小抽屉看「当前聊天 + 全局」
-- 命令 `/tokenstats`（别名 `/tstats`、`/tt`）直接弹抽屉
-- **悬浮球可拖动**：按住任意拖动到你喜欢的位置，位置会记住（重启不丢）；抽屉会紧贴悬浮球弹出
-- 点一下悬浮球 = 开/关抽屉（可反复开关）；点击抽屉以外区域或按 Esc 也可关闭
-- **手机适配**：触屏可拖动不误触滚页；悬浮球/抽屉适配窄屏，按钮加大触控目标
-- 完整统计弹窗：全局按模型表 + 各聊天表 + 合计行
+- **真实用量优先**：拦截 `/api/backends/chat-completions/generate` 响应，读取 SSE 流里的 `usage`（`prompt_tokens` / `completion_tokens`），即 API 账单数字；拿不到自动回落本地 tokenizer 估算
+- **全局总额**：跨所有聊天累计每个模型的输入/输出 Token，持久化重启不丢
+- **当前聊天**：进入聊天即显示该聊天的输入/输出/合计（按模型拆分）
+- **今日用量**：按天分桶统计，抽屉显示「今日」卡片
+- **悬浮球 + 小抽屉**：可拖动到任意位置（位置记忆），点开抽屉；抽屉内可切换悬浮球显示「当前聊天 / 全局 / 今日」
+- 命令 `/tokenstats`（别名 `/tstats`、`/tt`）
+- 完整统计弹窗：今日 + 全局按模型表 + 各聊天表
+- **自动更新**：manifest 开启 `auto_update`，可在酒馆扩展面板一键升级
 
 ## 安装
 
-把 `model-token-totals/` 整个文件夹放进：
-
-    SillyTavern/public/scripts/extensions/
-
-刷新页面。或解压 `model-token-totals.zip` 后同样放入。
+把 `model-token-totals/` 放进 `SillyTavern/public/scripts/extensions/`，刷新页面。
+或解压 `model-token-totals.zip` 同样放入。
 
 ## 使用
 
-1. 右下角悬浮球点一下展开 / 收起抽屉（Esc 也可关闭）
-2. 抽屉里：当前聊天此前用了多少 Token，全局总额与各模型用量
-3. 点「查看完整统计」打开大窗口（含按聊天明细）
-4. 设置 → 扩展 → 模型 Token 统计：总开关、输入/输出开关、打开抽屉、全局清零
+1. 悬浮球可拖到喜欢的位置；点一下开/关抽屉，点外面或 Esc 也能关
+2. 抽屉里三个卡片：当前聊天 / 今日 / 全局总额，外加悬浮球显示模式切换
+3. 「查看完整统计」打开大窗口（含各聊天明细与今日汇总）
+4. 设置 → 扩展 → 模型 Token 统计：总开关、输入/输出开关、真实用量开关、清零
 
 ## 原理
 
-1. 监听 `MESSAGE_SENT` / `MESSAGE_RECEIVED`，消息落库后取 `context.chat[index]`
-2. `context.getTokenCountAsync(消息文本)` 按当前 tokenizer 估算
-3. 按模型名（`getChatCompletionModel()`）累计到 `totals`（全局）与 `chatTotals`（按聊天）
-4. `saveSettingsDebounced()` 持久化，重启后保留
-5. 同一消息会话内去重；swipe 换内容后自动重计
+1. 拦截 fetch 的 generate 响应，克隆流单独读取 SSE，抓末尾 `usage`
+2. `MESSAGE_RECEIVED` 时优先用抓到的真实 usage 累加；否则用 `getTokenCountAsync` 估算
+3. 按模型名（`getChatCompletionModel()`）同时写入 `totals` / `chatTotals` / `dailyTotals` 三个仓库
+4. `saveSettingsDebounced()` 持久化
 
 ## 数据格式
 
     extensionSettings["model-token-totals"] = {
-      enabled: true, countUser: true, countOutput: true,
-      totals: { "gpt-4o": { input: 12345, output: 6789, count: 23 } },
-      chatTotals: { "chat-xxx.json": { "gpt-4o": { input: 999, output: 500, count: 7 } } }
+      enabled: true, countUser: true, countOutput: true, useRealUsage: true,
+      fabMode: "chat",  // chat | global | today
+      totals:      { "gpt-4o": { input, output, count } },
+      chatTotals:  { "chat-xxx.json": { "gpt-4o": { input, output, count } } },
+      dailyTotals: { "2026-09-05": { "gpt-4o": { input, output, count } } }
     }
 
 ## 已知边界
 
-- Token 为**估算值**（同酒馆输入框显示），非服务端账单
-- 只统计启用后新发的消息；历史聊天不重算
-- 悬浮球可拖动到自己喜欢的位置（自动记住）；也可通过 style.css 里 `#mtt-fab`、`#mtt-drawer` 微调样式
+- 真实 usage 仅在流式响应末尾带 `usage` 时可用（部分中转/网关不返回，此时回落估算）
+- 非 Chat Completion 后端（如纯 textgen）只有估算值
+- 只统计启用后新发生的消息，历史聊天不回溯
 
 ## 校验
 
-    validate-extension-manifest.mjs --root model-token-totals  →  pass: true
+    manifest 字段完整 · node --check 通过 · v0.4.0

@@ -96,3 +96,15 @@
     .mtt-line { font-size: 13px; padding: 3px 0; }
     .mtt-btn { padding: 10px 8px; font-size: 13px; min-height: 38px; }
 }
+
+/* ===== 悬浮球显示模式切换 ===== */
+.mtt-modes { display: flex; gap: 6px; }
+.mtt-mode-btn {
+    flex: 1; padding: 5px 4px; font-size: 11px; cursor: pointer;
+    border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.06); color: inherit;
+}
+.mtt-mode-btn:hover { background: rgba(255,255,255,0.14); }
+.mtt-mode-btn.active {
+    background: #5a6d9e; border-color: transparent; color: #fff; font-weight: 700;
+}
