@@ -108,3 +108,56 @@
 .mtt-mode-btn.active {
     background: #5a6d9e; border-color: transparent; color: #fff; font-weight: 700;
 }
+
+/* ===== 完整统计弹窗（重设计） ===== */
+.mtt-popup { max-width: 720px; }
+.mtt-hero { text-align: center; padding: 10px 0 4px; }
+.mtt-hero-label { font-size: 12px; opacity: .65; letter-spacing: 2px; }
+.mtt-hero-num {
+    font-size: 42px; font-weight: 800; line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(135deg, #7ea4ff, #b48cff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.mtt-hero-sub { font-size: 12px; opacity: .75; margin-top: 2px; }
+.mtt-dot { margin: 0 6px; opacity: .5; }
+
+.mtt-cards { display: flex; gap: 10px; margin: 14px 0 4px; }
+.mtt-stat {
+    flex: 1; border-radius: 12px; padding: 10px 14px;
+    background: rgba(126, 164, 255, 0.10);
+    border: 1px solid rgba(126, 164, 255, 0.25);
+}
+.mtt-stat-empty { opacity: .55; }
+.mtt-stat-label { font-size: 12px; opacity: .7; }
+.mtt-stat-num { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mtt-stat-num.mtt-stat-dim { opacity: .4; }
+.mtt-stat-sub { font-size: 11px; opacity: .6; }
+
+.mtt-section-title { font-weight: 700; font-size: 14px; margin: 18px 0 8px; }
+.mtt-section-sub { font-weight: 400; font-size: 11px; opacity: .55; margin-left: 6px; }
+
+.mtt-rows { display: flex; flex-direction: column; gap: 10px; }
+.mtt-row-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.mtt-row-name {
+    font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mtt-date { opacity: .5; margin-left: 6px; font-size: 11px; }
+.mtt-row-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mtt-row-val small { opacity: .5; font-size: 11px; margin-left: 3px; }
+.mtt-bar {
+    height: 6px; border-radius: 3px; margin: 4px 0 3px;
+    background: rgba(127, 127, 127, 0.18); overflow: hidden;
+}
+.mtt-bar-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, #5a8dee, #7ea4ff);
+}
+.mtt-bar-chat { background: linear-gradient(90deg, #9e6fde, #c39bff); }
+.mtt-row-bot { display: flex; gap: 14px; font-size: 11px; opacity: .6; font-variant-numeric: tabular-nums; }
+.mtt-none { opacity: .55; font-size: 13px; padding: 12px; text-align: center; }
+
+@media (max-width: 600px) {
+    .mtt-hero-num { font-size: 32px; }
+    .mtt-cards { flex-direction: column; }
+}

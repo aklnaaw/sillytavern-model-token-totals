@@ -485,42 +485,63 @@ function renderFloatUI() {
 // ============================================================================
 async function showFullPopup() {
     const ctx = getCtx();
+    const settings = getSettings();
     const global_ = globalsummary();
     const chat = currentChatSummary();
     const today = daySummary(todayKey());
 
-    // 全局（按模型）表格
-    const globalRows = global_.models.map(r => ({ ...r, input: fmt(r.input), output: fmt(r.output), total: fmt(r.total) }));
-    const totalRow = { model: '合计所有模型', input: fmt(global_.input), output: fmt(global_.output), total: fmt(global_.total), count: global_.count };
+    const pct = (v, total) => {
+        if (!total) return 0;
+        return Math.max(2, Math.round((v / total) * 100));
+    };
 
-    // 各聊天表格
-    const settings = getSettings();
-    const perChat = [];
-    for (const [cid, byModel] of Object.entries(settings.chatTotals || {})) {
+    // 模型行：带占比条
+    const maxModel = global_.models.length ? global_.models[0].total : 0;
+    const globalRows = global_.models.map(r => ({
+        model: r.model,
+        input: fmt(r.input), output: fmt(r.output), total: fmt(r.total), count: r.count,
+        share: pct(r.total, global_.total),
+        barW: pct(r.total, maxModel),
+    }));
+
+    // 聊天行：去掉时间戳噪声，只留可读名 + 日期
+    const chatRows = Object.entries(settings.chatTotals || {}).map(([cid, byModel]) => {
         let input = 0, output = 0, count = 0;
         for (const v of Object.values(byModel)) {
             input += Number(v?.input || 0); output += Number(v?.output || 0); count += Number(v?.count || 0);
         }
-        perChat.push({ chatId: cid, input: fmt(input), output: fmt(output), total: fmt(input + output), count });
-    }
-    perChat.sort((a, b) => Number(b.total.replace(/,/g, '')) - Number(a.total.replace(/,/g, '')));
+        const m = cid.match(/(\d{4}-\d{2}-\d{2})/);
+        return { chatId: cid, date: m ? m[1] : '', name: cid.replace(/ - \d{4}-\d{2}-\d{2}.*$/, ''), input, output, total: input + output, count };
+    }).sort((a, b) => b.total - a.total).slice(0, 12);
+    const maxChat = chatRows.length ? chatRows[0].total : 0;
+    const perChat = chatRows.map(r => ({
+        name: escapeHtml(r.name), date: r.date,
+        input: fmt(r.input), output: fmt(r.output), total: fmt(r.total), count: r.count,
+        barW: pct(r.total, maxChat),
+    }));
 
     const html = await ctx.renderExtensionTemplateAsync(myFolder(), 'window', {
-        globalRows,
-        totalRow,
-        perChat,
-        curChatId: chat.chatId || '',
+        grandTotal: fmt(global_.total),
+        grandInput: fmt(global_.input),
+        grandOutput: fmt(global_.output),
+        grandCount: global_.count,
+        modelCount: global_.models.length,
         todayDay: today.day || '',
+        todayTotal: fmt(today.total),
         todayInput: fmt(today.input),
         todayOutput: fmt(today.output),
-        todayTotal: fmt(today.total),
-        curInput: fmt(chat.input),
-        curOutput: fmt(chat.output),
-        curTotal: fmt(chat.total),
+        todayCount: today.count,
+        todayEmpty: today.total === 0,
+        hasChat: !!chat.chatId,
+        chatTotal: fmt(chat.total),
+        chatInput: fmt(chat.input),
+        chatOutput: fmt(chat.output),
+        chatCount: chat.count,
+        globalRows,
+        perChat,
     });
     ctx.callGenericPopup(html, ctx.POPUP_TYPE.TEXT, '', { wide: true, large: true, allowVerticalScrolling: true });
 }
-
 // ============================================================================
 // 设置页抽屉（设置在扩展面板）
 // ============================================================================

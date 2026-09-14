@@ -4,7 +4,7 @@
   "dependencies": [],
   "js": "index.js",
   "author": "aklnaaw",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "auto_update": true,
   "hooks": {
     "activate": "onActivate",

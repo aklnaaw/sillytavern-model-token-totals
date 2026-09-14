@@ -1,29 +1,61 @@
-<div class="wide100p">
-    <h3>模型 Token 统计</h3>
-    <div class="justifyLeft flex-container flexFlowColumn">
-        <h4>今日：{{todayDay}}（输入 {{todayInput}} / 输出 {{todayOutput}} / 合计 {{todayTotal}}）</h4>
-        <h4>当前聊天：{{curChatId}}（输入 {{curInput}} / 输出 {{curOutput}} / 合计 {{curTotal}}）</h4>
-        <table class="mtt-table">
-            <thead><tr><th>模型</th><th>输入</th><th>输出</th><th>总计</th><th>消息数</th></tr></thead>
-            <tbody>
-            {{#each globalRows}}
-                <tr><td class="mtt-model">{{model}}</td><td>{{input}}</td><td>{{output}}</td><td class="mtt-total"><b>{{total}}</b></td><td>{{count}}</td></tr>
+<div class="mtt-popup">
+    <div class="mtt-hero">
+        <div class="mtt-hero-label">累计总用量</div>
+        <div class="mtt-hero-num">{{grandTotal}}</div>
+        <div class="mtt-hero-sub">
+            <span>输入 {{grandInput}}</span><span class="mtt-dot">·</span>
+            <span>输出 {{grandOutput}}</span><span class="mtt-dot">·</span>
+            <span>{{grandCount}} 条消息 · {{modelCount}} 个模型</span>
+        </div>
+    </div>
+
+    <div class="mtt-cards">
+        <div class="mtt-stat {{#if todayEmpty}}mtt-stat-empty{{/if}}">
+            <div class="mtt-stat-label">今日 {{todayDay}}</div>
+            <div class="mtt-stat-num">{{todayTotal}}</div>
+            <div class="mtt-stat-sub">{{#if todayEmpty}}今天还没有记录{{else}}输入 {{todayInput}} · 输出 {{todayOutput}} · {{todayCount}} 条{{/if}}</div>
+        </div>
+        <div class="mtt-stat">
+            <div class="mtt-stat-label">当前聊天</div>
+            {{#if hasChat}}
+            <div class="mtt-stat-num">{{chatTotal}}</div>
+            <div class="mtt-stat-sub">输入 {{chatInput}} · 输出 {{chatOutput}} · {{chatCount}} 条</div>
             {{else}}
-                <tr><td colspan="5">还没有全局统计数据，先发几条消息吧。</td></tr>
-            {{/each}}
-            <tr class="mtt-total-row"><td><b>{{totalRow.model}}</b></td><td>{{totalRow.input}}</td><td>{{totalRow.output}}</td><td class="mtt-total"><b>{{totalRow.total}}</b></td><td>{{totalRow.count}}</td></tr>
-            </tbody>
-        </table>
-        <h4>各聊天 Token（按总量降序）</h4>
-        <table class="mtt-table">
-            <thead><tr><th>聊天 ID</th><th>输入</th><th>输出</th><th>总计</th><th>消息数</th></tr></thead>
-            <tbody>
-            {{#each perChat}}
-                <tr><td class="mtd-model">{{chatId}}</td><td>{{input}}</td><td>{{output}}</td><td class="mtt-total"><b>{{total}}</b></td><td>{{count}}</td></tr>
-            {{else}}
-                <tr><td colspan="5">暂无按聊天的统计数据。</td></tr>
-            {{/each}}
-            </tbody>
-        </table>
+            <div class="mtt-stat-num mtt-stat-dim">—</div>
+            <div class="mtt-stat-sub">尚未进入聊天</div>
+            {{/if}}
+        </div>
+    </div>
+
+    <div class="mtt-section-title">模型用量 <span class="mtt-section-sub">按总量排序，条长 = 占比</span></div>
+    <div class="mtt-rows">
+    {{#each globalRows}}
+        <div class="mtt-row">
+            <div class="mtt-row-top">
+                <span class="mtt-row-name" title="{{model}}">{{model}}</span>
+                <span class="mtt-row-val"><b>{{total}}</b><small> {{share}}%</small></span>
+            </div>
+            <div class="mtt-bar"><div class="mtt-bar-fill" style="width: {{barW}}%"></div></div>
+            <div class="mtt-row-bot"><span>入 {{input}}</span><span>出 {{output}}</span><span>{{count}} 条</span></div>
+        </div>
+    {{else}}
+        <div class="mtt-none">还没有任何记录，去聊一句再回来看。</div>
+    {{/each}}
+    </div>
+
+    <div class="mtt-section-title">最近的聊天 <span class="mtt-section-sub">Top 12</span></div>
+    <div class="mtt-rows">
+    {{#each perChat}}
+        <div class="mtt-row">
+            <div class="mtt-row-top">
+                <span class="mtt-row-name" title="{{name}}">{{name}}<small class="mtt-date">{{date}}</small></span>
+                <span class="mtt-row-val"><b>{{total}}</b></span>
+            </div>
+            <div class="mtt-bar"><div class="mtt-bar-fill mtt-bar-chat" style="width: {{barW}}%"></div></div>
+            <div class="mtt-row-bot"><span>入 {{input}}</span><span>出 {{output}}</span><span>{{count}} 条</span></div>
+        </div>
+    {{else}}
+        <div class="mtt-none">暂无按聊天的记录。</div>
+    {{/each}}
     </div>
 </div>
