@@ -43,16 +43,32 @@
     {{/each}}
     </div>
 
-    <div class="mtt-section-title">最近的聊天 <span class="mtt-section-sub">Top 12</span></div>
+    <div class="mtt-section-title">聊天记录 <span class="mtt-section-sub">按角色分组，同名聊天带编号</span></div>
     <div class="mtt-rows">
-    {{#each perChat}}
-        <div class="mtt-row">
+    {{#each chatGroups}}
+        <div class="mtt-group">
             <div class="mtt-row-top">
-                <span class="mtt-row-name" title="{{name}}">{{name}}<small class="mtt-date">{{date}}</small></span>
+                <span class="mtt-row-name mtt-group-name" title="{{name}}">{{name}}<small class="mtt-count-badge">{{n}} 个</small></span>
                 <span class="mtt-row-val"><b>{{total}}</b></span>
             </div>
             <div class="mtt-bar"><div class="mtt-bar-fill mtt-bar-chat" style="width: {{barW}}%"></div></div>
             <div class="mtt-row-bot"><span>入 {{input}}</span><span>出 {{output}}</span><span>{{count}} 条</span></div>
+            <div class="mtt-subrows">
+            {{#each chats}}
+                <div class="mtt-subrow">
+                    <div class="mtt-subrow-top">
+                        <span class="mtt-subrow-name">
+                            <span class="mtt-idx">{{idx}}</span>
+                            <span class="mtt-ts" title="{{full}}">{{short}}</span>
+                            {{#if branch}}<span class="mtt-branch">{{branch}}</span>{{/if}}
+                        </span>
+                        <span class="mtt-subrow-val">{{total}}</span>
+                    </div>
+                    <div class="mtt-bar mtt-bar-sm"><div class="mtt-bar-fill mtt-bar-chat" style="width: {{barW}}%"></div></div>
+                    <div class="mtt-row-bot"><span>入 {{input}}</span><span>出 {{output}}</span><span>{{count}} 条</span></div>
+                </div>
+            {{/each}}
+            </div>
         </div>
     {{else}}
         <div class="mtt-none">暂无按聊天的记录。</div>

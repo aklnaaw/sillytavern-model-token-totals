@@ -504,22 +504,69 @@ async function showFullPopup() {
         barW: pct(r.total, maxModel),
     }));
 
-    // 聊天行：去掉时间戳噪声，只留可读名 + 日期
-    const chatRows = Object.entries(settings.chatTotals || {}).map(([cid, byModel]) => {
+    // 聊天行：按角色分组 + 同名编号 + 精确时间
+    const parseChatId = (cid) => {
+        const m = cid.match(/^(.*?) - (\d{4})-(\d{2})-(\d{2})@(\d{2})h(\d{2})m(\d{2})s(\d+)ms(.*)$/);
+        if (!m) return { name: cid, short: cid, full: cid, ts: 0 };
+        const [, name, y, mo, d, h, mi, sec, , tail] = m;
+        const date = new Date(+y, +mo - 1, +d, +h, +mi, +sec);
+        return {
+            name: name.trim(),
+            short: mo + '-' + d + ' ' + h + ':' + mi,
+            full: y + '-' + mo + '-' + d + ' ' + h + ':' + mi + ':' + sec,
+            branch: (tail || '').replace(/^\s*-\s*/, '').trim(),
+            ts: date.getTime(),
+        };
+    };
+
+    // 1) 汇总每个聊天
+    const allChats = Object.entries(settings.chatTotals || {}).map(([cid, byModel]) => {
         let input = 0, output = 0, count = 0;
         for (const v of Object.values(byModel)) {
             input += Number(v?.input || 0); output += Number(v?.output || 0); count += Number(v?.count || 0);
         }
-        const m = cid.match(/(\d{4}-\d{2}-\d{2})/);
-        return { chatId: cid, date: m ? m[1] : '', name: cid.replace(/ - \d{4}-\d{2}-\d{2}.*$/, ''), input, output, total: input + output, count };
-    }).sort((a, b) => b.total - a.total).slice(0, 12);
-    const maxChat = chatRows.length ? chatRows[0].total : 0;
-    const perChat = chatRows.map(r => ({
-        name: escapeHtml(r.name), date: r.date,
-        input: fmt(r.input), output: fmt(r.output), total: fmt(r.total), count: r.count,
-        barW: pct(r.total, maxChat),
-    }));
+        return { cid, ...parseChatId(cid), input, output, total: input + output, count };
+    }).sort((a, b) => b.ts - a.ts);
 
+    // 2) 按角色名分组
+    const groupMap = new Map();
+    for (const c of allChats) {
+        if (!groupMap.has(c.name)) groupMap.set(c.name, []);
+        groupMap.get(c.name).push(c);
+    }
+    const groups = [...groupMap.entries()].map(([name, chats]) => {
+        let input = 0, output = 0, count = 0;
+        chats.forEach((c, i) => {
+            input += c.input; output += c.output; count += c.count;
+            c.idx = chats.length - i; // 最新的编号大；也可以反过来
+        });
+        return {
+            name: escapeHtml(name),
+            n: chats.length,
+            input: fmt(input), output: fmt(output), total: fmt(input + output), count,
+            chats: chats.map(c => ({
+                idx: '#' + c.idx,
+                short: c.short,
+                full: c.full,
+                branch: c.branch,
+                input: fmt(c.input), output: fmt(c.output), total: fmt(c.total), count: c.count,
+                barW: 0, // 稍后按组内最大值回填
+            })),
+        };
+    }).sort((a, b) => Number(String(b.total).replace(/,/g, '')) - Number(String(a.total).replace(/,/g, '')));
+
+    // 组内条形按该组最大值、且限制在组内比较
+    for (const g of groups) {
+        const mx = Math.max(...g.chats.map(c => Number(String(c.total).replace(/,/g, ''))), 1);
+        g.chats.forEach(c => { c.barW = pct(Number(String(c.total).replace(/,/g, '')), mx); });
+    }
+
+    // 整体也按全局最大值的绝对占比给组一条主线（可选）
+    const maxGroup = groups.length ? Number(String(groups[0].total).replace(/,/g, '')) : 1;
+    groups.forEach(g => { g.barW = pct(Number(String(g.total).replace(/,/g, '')), maxGroup); });
+
+    const perChat = []; // 保留旧变量名，模板已改用 groups
+    const chatGroups = groups;
     const html = await ctx.renderExtensionTemplateAsync(myFolder(), 'window', {
         grandTotal: fmt(global_.total),
         grandInput: fmt(global_.input),
@@ -538,6 +585,7 @@ async function showFullPopup() {
         chatOutput: fmt(chat.output),
         chatCount: chat.count,
         globalRows,
+        chatGroups,
         perChat,
     });
     ctx.callGenericPopup(html, ctx.POPUP_TYPE.TEXT, '', { wide: true, large: true, allowVerticalScrolling: true });
@@ -680,7 +728,7 @@ export async function onActivate() {
         injectFloat();
         renderFloatUI();
         await initSettingsPanel();
-        console.log('[' + MODULE_ID + '] 已激活 v0.5.0');
+        console.log('[' + MODULE_ID + '] 已激活 v0.5.1');
     } catch (error) {
         console.error('[' + MODULE_ID + '] 激活失败：', error);
     }
