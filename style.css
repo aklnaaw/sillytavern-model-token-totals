@@ -161,3 +161,8 @@
     .mtt-hero-num { font-size: 32px; }
     .mtt-cards { flex-direction: column; }
 }
+
+/* ===== 检查更新状态 ===== */
+.mtt-muted { color: #999; font-size: 12px; margin-top: 6px; }
+.mtt-update-new { color: #ffb454; font-size: 12px; margin-top: 6px; font-weight: 600; }
+.mtt-update-new a { color: #7ea4ff; text-decoration: underline; }

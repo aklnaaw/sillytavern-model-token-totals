@@ -543,6 +543,78 @@ async function showFullPopup() {
     ctx.callGenericPopup(html, ctx.POPUP_TYPE.TEXT, '', { wide: true, large: true, allowVerticalScrolling: true });
 }
 // ============================================================================
+// 检查更新（查询 GitHub Release，并联动 ST 自带的更新按钮）
+// ============================================================================
+const REPO = 'aklnaaw/sillytavern-model-token-totals';
+
+function parseVer(v) {
+    return String(v || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+}
+
+function isNewer(remote, local) {
+    const a = parseVer(remote), b = parseVer(local);
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        const x = a[i] || 0, y = b[i] || 0;
+        if (x > y) return true;
+        if (x < y) return false;
+    }
+    return false;
+}
+
+let cachedLocalVersion = null;
+
+async function localVersion() {
+    if (cachedLocalVersion) return cachedLocalVersion;
+    try {
+        // 直接读自己目录下的 manifest.json，最可靠
+        const url = new URL('manifest.json', import.meta.url).href;
+        const res = await origFetch(url, { cache: 'no-store' });
+        if (res.ok) {
+            const m = await res.json();
+            cachedLocalVersion = String(m.version || '0.0.0');
+            return cachedLocalVersion;
+        }
+    } catch { /* 读不到就返回未知 */ }
+    return '0.0.0';
+}
+
+async function checkForUpdate(manual = true) {
+    const local = await localVersion();
+    const $btn = $('#mtt_check_update');
+    $btn.prop('disabled', true).text('检查中…');
+    try {
+        const res = await origFetch('https://api.github.com/repos/' + REPO + '/releases/latest', {
+            headers: { 'Accept': 'application/vnd.github+json' },
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const remote = String(data.tag_name || '').replace(/^v/, '');
+        if (isNewer(remote, local)) {
+            const url = data.html_url;
+            $('#mtt_update_status').html(
+                '有新版本 <b>v' + escapeHtml(remote) + '</b>（当前 v' + escapeHtml(local) + '）' +
+                ' <a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">查看 / 下载</a>'
+            ).removeClass('mtt-muted').addClass('mtt-update-new');
+            $('#mtt_check_update').text('有新版本').prop('disabled', false);
+            if (manual) toastr.info('发现新版本 v' + remote);
+            // 联动 ST 自带的更新按钮（若为 git 安装）
+            const block = document.querySelector('.extension_block[data-name*="' + MODULE_ID + '"]');
+            block?.querySelector('.btn_update')?.classList.remove('displayNone');
+        } else {
+            $('#mtt_update_status').text('已是最新版本 v' + local).removeClass('mtt-update-new').addClass('mtt-muted');
+            $('#mtt_check_update').text('检查更新').prop('disabled', false);
+            if (manual) toastr.success('已是最新版本');
+        }
+        return { local, remote };
+    } catch (error) {
+        $('#mtt_update_status').text('检查失败：' + (error?.message || error)).addClass('mtt-muted');
+        $('#mtt_check_update').text('检查更新').prop('disabled', false);
+        if (manual) toastr.error('检查更新失败');
+        return null;
+    }
+}
+
+// ============================================================================
 // 设置页抽屉（设置在扩展面板）
 // ============================================================================
 async function initSettingsPanel() {
@@ -569,6 +641,9 @@ async function initSettingsPanel() {
         ctx.saveSettingsDebounced();
     });
     $('#mtt_open_drawer').on('click', () => toggleDrawer(true));
+    $('#mtt_check_update').on('click', () => checkForUpdate(true));
+    // 打开设置面板时静默检查一次
+    checkForUpdate(false);
     $('#mtt_reset_all').on('click', () => {
         settings.totals = {};
         settings.chatTotals = {};
@@ -605,7 +680,7 @@ export async function onActivate() {
         injectFloat();
         renderFloatUI();
         await initSettingsPanel();
-        console.log('[' + MODULE_ID + '] 已激活 v0.4.0');
+        console.log('[' + MODULE_ID + '] 已激活 v0.5.0');
     } catch (error) {
         console.error('[' + MODULE_ID + '] 激活失败：', error);
     }
